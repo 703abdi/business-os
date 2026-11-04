@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
-// One login for the whole OS (from the Abdi OS template): a signed JWT in an
+// One login for the whole OS: a signed JWT in an
 // httpOnly cookie. The first sign-in matching ADMIN_EMAIL / ADMIN_PASSWORD
 // creates the account (src/app/api/auth/login/route.ts).
 
