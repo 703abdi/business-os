@@ -1,0 +1,623 @@
+// Business OS data model.
+//
+// These tables live in the Postgres schema "business_os" (src/lib/database-url.ts adds
+// ?schema=business_os). The sales tools (forms, contacts,
+// automations, pages, blasts) keep their own tables in "public" and create
+// them at runtime (src/lib/db.ts). Same database, no overlap.
+//
+// Every row the seed creates has isSample = true so it can be wiped from
+// Settings in one click.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ───────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         UserRole @default(EMPLOYEE)
+  teamMemberId String?  @unique
+  teamMember   TeamMember? @relation("TeamMemberUser", fields: [teamMemberId], references: [id], onDelete: SetNull)
+  active       Boolean  @default(true)
+  sessionVersion Int    @default(0)
+  isSample     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  assignedContent ContentPiece[] @relation("ContentAssignee")
+  savedViews      CrmSavedView[]
+}
+
+/** Persistent, serverless-safe throttle for failed password attempts. */
+model LoginRateLimit {
+  id              String   @id @default(cuid())
+  email           String
+  ip              String
+  failures        Int      @default(0)
+  windowStartedAt DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([email, ip])
+  @@index([updatedAt])
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+}
+
+// ─── CRM ────────────────────────────────────────────────────
+
+enum Stage {
+  NEW
+  CONTACTED
+  QUOTED
+  BOOKED
+  COMPLETED
+  MEMBER
+  LOST
+}
+
+enum LeadSource {
+  META
+  GOOGLE
+  INSTAGRAM
+  TIKTOK
+  REFERRAL
+  REPEAT
+  WEBSITE
+  OTHER
+}
+
+model Client {
+  id        String     @id @default(cuid())
+  name      String
+  phone     String     @default("")
+  email     String     @default("")
+  address   String     @default("")
+  city      String     @default("")
+  zip       String     @default("")
+  lat       Float?
+  lng       Float?
+  stage     Stage      @default(NEW)
+  source    LeadSource @default(OTHER)
+  tags      String[]   @default([])
+  ceramic   Boolean    @default(false) // optional legacy service flag
+  notes     String     @default("")
+  // Speed to lead: when the lead came in and when someone first replied.
+  leadAt       DateTime  @default(now())
+  firstReplyAt DateTime?
+  lastContactAt DateTime?
+  lostReason String     @default("")
+  rebookIntervalDays Int @default(30)
+  externalId String?    @unique // booking / form response id, for de-duping imports
+  isSample  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  vehicles       Vehicle[]
+  jobs           Job[]
+  activities     Activity[]
+  followUps      FollowUp[]
+  quotes         Quote[]
+  memberships    Membership[]
+  payments       Payment[]
+  paymentPlans   PaymentPlan[]
+  reviewRequests ReviewRequest[]
+
+  @@index([stage])
+  @@index([leadAt])
+}
+
+model Vehicle {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  year      Int?
+  make      String   @default("")
+  model     String   @default("")
+  color     String   @default("")
+  size      String   @default("sedan") // sedan | suv | truck | van
+  condition String   @default("")
+  photos    String[] @default([])
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  jobs Job[]
+}
+
+// Timeline entries on a client: notes, texts, calls, stage changes.
+model Activity {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  kind      String   @default("note") // note | call | text | email | stage | system
+  body      String
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([clientId, createdAt])
+}
+
+model FollowUp {
+  id         String      @id @default(cuid())
+  clientId   String?
+  client     Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title      String
+  dueAt      DateTime
+  doneAt     DateTime?
+  assigneeId String?
+  assignee   TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  sequence   String      @default("") // which follow-up sequence created it
+  isSample   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  @@index([doneAt, dueAt])
+}
+
+// ─── Services, jobs, scheduling ─────────────────────────────
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("service") // service | recurring | addon
+  price       Int // dollars
+  durationMin Int      @default(180)
+  description String   @default("")
+  active      Boolean  @default(true)
+  sort        Int      @default(0)
+  isSample    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  jobs Job[]
+}
+
+enum JobStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  DONE
+  CANCELED
+  NO_SHOW
+}
+
+model Job {
+  id           String      @id @default(cuid())
+  clientId     String
+  client       Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  vehicleId    String?
+  vehicle      Vehicle?    @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  serviceId    String?
+  service      Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  membershipId String?
+  membership   Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  assigneeId   String?
+  assignee     TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  title        String      @default("")
+  price        Int         @default(0) // dollars charged for this visit (0 for member visits)
+  startAt      DateTime
+  durationMin  Int         @default(180)
+  status       JobStatus   @default(SCHEDULED)
+  address      String      @default("")
+  city         String      @default("")
+  lat          Float?
+  lng          Float?
+  notes        String      @default("")
+  // Per-job checklist (Team module).
+  photosBefore  Boolean   @default(false)
+  photosAfter   Boolean   @default(false)
+  walkthrough   Boolean   @default(false)
+  reviewAsked   Boolean   @default(false)
+  // Package pitch after one-off jobs (Sales module).
+  pitchOutcome  String    @default("") // "" | pitched | interested | signed | declined
+  completedAt   DateTime?
+  externalId    String?   @unique // booking-provider appointment id
+  isSample      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  payments       Payment[]
+  payEntries     PayEntry[]
+  reviewRequests ReviewRequest[]
+  contentPieces  ContentPiece[]
+
+  @@index([startAt])
+  @@index([status])
+}
+
+// ─── Memberships / MRR ──────────────────────────────────────
+
+model Plan {
+  id             String   @id @default(cuid())
+  name           String
+  price          Int // dollars per month
+  foundingPrice  Int? // locked rate for founding members
+  visitsPerMonth Int      @default(1)
+  includes       String[] @default([])
+  active         Boolean  @default(true)
+  sort           Int      @default(0)
+  isSample       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  memberships Membership[]
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+}
+
+model Membership {
+  id           String           @id @default(cuid())
+  clientId     String
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  planId       String
+  plan         Plan             @relation(fields: [planId], references: [id])
+  price        Int // locked monthly price for this member
+  founding     Boolean          @default(false)
+  status       MembershipStatus @default(ACTIVE)
+  startedAt    DateTime         @default(now())
+  canceledAt   DateTime?
+  cancelReason String           @default("")
+  nextVisitDue DateTime?
+  isSample     Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+
+  jobs     Job[]
+  payments Payment[]
+}
+
+// ─── Money ──────────────────────────────────────────────────
+
+model Payment {
+  id           String      @id @default(cuid())
+  date         DateTime
+  amount       Int // dollars
+  kind         String      @default("one_time") // one_time | recurring
+  clientId     String?
+  client       Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  jobId        String?
+  job          Job?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  membershipId String?
+  membership   Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  paymentPlanId String?
+  paymentPlan   PaymentPlan? @relation(fields: [paymentPlanId], references: [id], onDelete: SetNull)
+  note         String      @default("")
+  isSample     Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  @@index([date])
+}
+
+enum PaymentPlanStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELED
+}
+
+/** Installment or ongoing plan, separate from recurring maintenance memberships. */
+model PaymentPlan {
+  id              String            @id @default(cuid())
+  clientId        String
+  client          Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name            String
+  amount          Int
+  frequency       String            @default("monthly") // weekly | biweekly | monthly
+  startDate       DateTime
+  installments    Int?              // null means ongoing
+  nextDueDate     DateTime
+  status          PaymentPlanStatus @default(ACTIVE)
+  note            String            @default("")
+  isSample        Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  payments Payment[]
+
+  @@index([status, nextDueDate])
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  date      DateTime
+  category  String // ads | payroll | supplies | fuel | equipment | other
+  amount    Int // dollars
+  note      String   @default("")
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model Quote {
+  id        String    @id @default(cuid())
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items     Json      @default("[]") // [{ label, price }]
+  discount  Int       @default(0)
+  total     Int
+  status    String    @default("draft") // draft | sent | accepted | declined
+  message   String    @default("")
+  sentAt    DateTime?
+  isSample  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+}
+
+// ─── Team ───────────────────────────────────────────────────
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("Team member")
+  phone     String   @default("")
+  color     String   @default("#0e7c86")
+  payType   String   @default("per_job") // per_job | hourly | owner
+  payRate   Int      @default(0) // dollars per job or per hour
+  active    Boolean  @default(true)
+  isOwner   Boolean  @default(false)
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  jobs      Job[]
+  followUps FollowUp[]
+  payEntries PayEntry[]
+  notes     TeamNote[]
+  training  TrainingProgress[]
+  user      User? @relation("TeamMemberUser")
+}
+
+// ─── Content ───────────────────────────────────────────────
+
+enum ContentStatus {
+  IDEA
+  SCRIPTED
+  READY_TO_FILM
+  FILMED
+  EDITED
+  SCHEDULED
+  POSTED
+  ARCHIVED
+}
+
+enum ContentPostStatus {
+  SCHEDULED
+  POSTED
+  MISSED
+}
+
+model ContentPiece {
+  id             String        @id @default(cuid())
+  title          String
+  hook           String        @default("")
+  format         String        @default("Short-form")
+  script         String        @default("") // markdown-friendly rich text
+  researchNotes  String        @default("")
+  referenceLinks String[]      @default([])
+  shotList       String[]      @default([])
+  cta            String        @default("")
+  caption        String        @default("")
+  hashtags       String[]      @default([])
+  priority       Int           @default(2) // 1 high, 2 normal, 3 low
+  platforms      String[]      @default([])
+  assignedToId   String?
+  assignedTo     User?         @relation("ContentAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  dueAt          DateTime?
+  jobId          String?
+  job            Job?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  mediaLinks     String[]      @default([])
+  status         ContentStatus @default(IDEA)
+  isSample       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  posts  ContentPost[]
+  events ContentStageEvent[]
+
+  @@index([status, dueAt])
+  @@index([assignedToId, dueAt])
+}
+
+model ContentStageEvent {
+  id        String        @id @default(cuid())
+  pieceId   String
+  piece     ContentPiece  @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  from      ContentStatus?
+  to        ContentStatus
+  createdAt DateTime      @default(now())
+}
+
+model ContentAccount {
+  id         String   @id @default(cuid())
+  platform   String
+  handle     String   @default("")
+  profileUrl String   @default("")
+  active     Boolean  @default(true)
+  isSample   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  posts ContentPost[]
+
+  @@unique([platform, handle])
+}
+
+model ContentPost {
+  id          String            @id @default(cuid())
+  pieceId     String
+  piece       ContentPiece      @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     ContentAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  caption     String            @default("")
+  status      ContentPostStatus @default(SCHEDULED)
+  postedAt    DateTime?
+  postedUrl   String            @default("")
+  isSample    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([accountId, scheduledAt])
+}
+
+model CrmSavedView {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  filters   Json     @default("{}")
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model PayEntry {
+  id        String     @id @default(cuid())
+  memberId  String
+  member    TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  jobId     String?
+  job       Job?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  date      DateTime
+  hours     Float?
+  amount    Int
+  paid      Boolean    @default(false)
+  note      String     @default("")
+  isSample  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+}
+
+model TeamNote {
+  id        String     @id @default(cuid())
+  memberId  String
+  member    TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  kind      String     @default("note") // praise | issue | note
+  body      String
+  isSample  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+}
+
+model TrainingProgress {
+  id        String     @id @default(cuid())
+  memberId  String
+  member    TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  skill     String // key from src/modules/team/training.ts
+  status    String     @default("not_started") // not_started | practicing | passed
+  note      String     @default("")
+  updatedAt DateTime   @updatedAt
+  isSample  Boolean    @default(false)
+
+  @@unique([memberId, skill])
+}
+
+// ─── Ads ────────────────────────────────────────────────────
+
+model AdCampaign {
+  id        String   @id @default(cuid())
+  platform  String // meta | google
+  name      String
+  status    String   @default("active") // active | paused | ended
+  angle     String   @default("")
+  externalId String?
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  stats     AdStat[]
+  creatives AdCreative[]
+}
+
+// One row per campaign per week (or day). Entered by hand until the API is connected.
+model AdStat {
+  id         String     @id @default(cuid())
+  campaignId String
+  campaign   AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date       DateTime
+  spend      Int // dollars
+  leads      Int        @default(0)
+  booked     Int        @default(0)
+  isSample   Boolean    @default(false)
+
+  @@index([date])
+}
+
+model AdCreative {
+  id         String      @id @default(cuid())
+  campaignId String?
+  campaign   AdCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  angle      String
+  hook       String      @default("")
+  format     String      @default("video") // video | image | carousel
+  status     String      @default("testing") // testing | winner | killed
+  result     String      @default("")
+  isSample   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+}
+
+// ─── Google Business Profile ────────────────────────────────
+
+model ReviewSnapshot {
+  id       String   @id @default(cuid())
+  date     DateTime
+  rating   Float
+  count    Int
+  isSample Boolean  @default(false)
+
+  @@index([date])
+}
+
+model ReviewRequest {
+  id         String    @id @default(cuid())
+  clientId   String
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jobId      String?
+  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  sentAt     DateTime
+  channel    String    @default("text") // text | email | in_person
+  reviewed   Boolean   @default(false)
+  reviewedAt DateTime?
+  rating     Int?
+  reviewText String    @default("")
+  replied    Boolean   @default(false)
+  replyText  String    @default("")
+  isSample   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+}
+
+model GbpPost {
+  id        String   @id @default(cuid())
+  date      DateTime
+  kind      String   @default("update") // update | offer | photo | event
+  title     String
+  body      String   @default("")
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ─── Sales scripts ──────────────────────────────────────────
+
+model Script {
+  id        String   @id @default(cuid())
+  category  String // first_reply | follow_up | quote | objection | package_pitch | review_ask
+  title     String
+  body      String
+  sort      Int      @default(0)
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Raw inbound webhooks (booking providers and lead forms) kept for debugging and replay.
+model InboundEvent {
+  id        String   @id @default(cuid())
+  source    String
+  payload   Json
+  status    String   @default("received") // received | processed | ignored | error
+  error     String   @default("")
+  createdAt DateTime @default(now())
+}

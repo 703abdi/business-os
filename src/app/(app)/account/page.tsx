@@ -1,0 +1,4 @@
+import { requireUser } from "@/lib/auth";
+import { Card, Page, PageHeader, btn, input, label } from "@/components/app/ui";
+import { changeOwnPassword } from "@/modules/team/access-actions";
+export default async function AccountPage() { const user = await requireUser(); return <Page><PageHeader title="Account" sub={`${user.name ?? user.email} · ${user.role === "ADMIN" ? "Admin" : "Employee"}`} /><Card title="Change password"><form action={changeOwnPassword} className="max-w-md space-y-3"><div><label className={label}>Current password</label><input className={input} name="currentPassword" type="password" required /></div><div><label className={label}>New password</label><input className={input} name="password" type="password" minLength={8} required /></div><button className={btn.primary}>Update password</button></form></Card></Page>; }

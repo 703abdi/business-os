@@ -1,0 +1,57 @@
+import Link from "next/link";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
+import { Badge, Card, Empty, Page, PageHeader, Stat, Tabs, btn, input, label } from "@/components/app/ui";
+import { addDays, addMonths, fmtDay, fmtMonth, fmtTime, parseYmd, startOfMonth, startOfWeek, ymd } from "@/lib/dates";
+import { ContentBoard } from "@/modules/content/ContentBoard";
+import { ContentCalendar, accountColor } from "@/modules/content/ContentCalendar";
+import { ContentExecutorView } from "@/modules/content/ContentExecutorView";
+import { createContentPiece } from "@/modules/content/actions";
+import { contentStats, executorContent } from "@/modules/content/stats";
+import { CONTENT_FORMATS, CONTENT_PLATFORMS, CONTENT_STATUS_COLOR, CONTENT_STATUS_LABEL, CONTENT_STATUSES, type ContentStatusKey } from "@/modules/content/constants";
+
+type SP = Promise<{ view?: string; q?: string; status?: string; format?: string; platform?: string; assignee?: string; new?: string; calendar?: string; date?: string }>;
+type CalendarPiece = { id: string; title: string; posts: { id: string; accountId: string; scheduledAt: Date; status: string; account: { id: string; platform: string; handle: string } }[] };
+export const metadata = { title: "Content" };
+
+export default async function ContentPage({ searchParams }: { searchParams: SP }) {
+  const [user, sp] = await Promise.all([requireUser(), searchParams]);
+  if (user.role === "EMPLOYEE") return <Page><PageHeader title="What I&apos;m making today" sub="Open a card, follow the steps, then mark it done." /><ContentExecutorView pieces={await executorContent(user.id)} /></Page>;
+  const view = ["board", "list", "calendar"].includes(sp.view ?? "") ? sp.view! : "board";
+  const calendarMode = sp.calendar === "month" ? "month" : "week";
+  const calendarDate = parseYmd(sp.date);
+  const where: Prisma.ContentPieceWhereInput = {};
+  if (sp.q) where.OR = [{ title: { contains: sp.q, mode: "insensitive" } }, { hook: { contains: sp.q, mode: "insensitive" } }, { script: { contains: sp.q, mode: "insensitive" } }];
+  if (sp.status && (CONTENT_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status as ContentStatusKey;
+  if (sp.format) where.format = sp.format;
+  if (sp.platform) where.platforms = { has: sp.platform };
+  if (sp.assignee) where.assignedToId = sp.assignee;
+  const [pieces, users, jobs, stats] = await Promise.all([
+    prisma.contentPiece.findMany({ where, include: { assignedTo: { select: { name: true, email: true } }, posts: { include: { account: true }, orderBy: { scheduledAt: "asc" } } }, orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }], take: 300 }),
+    prisma.user.findMany({ where: { active: true }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }),
+    prisma.job.findMany({ orderBy: { startAt: "desc" }, take: 100, include: { client: true } }), contentStats(),
+  ]);
+  const qs = (patch: Record<string, string | undefined>) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries({ view, q: sp.q, status: sp.status, format: sp.format, platform: sp.platform, assignee: sp.assignee, calendar: sp.calendar, date: sp.date, ...patch })) if (v) p.set(k, v); return `/content?${p}`; };
+  return <Page wide>
+    <PageHeader title="Content manager" sub="Plan it on the board. Film and post from Today." actions={<><Link href="/content/today" className={btn.outline}>Today&apos;s execution</Link><Link href={qs({ new: "1" })} className={btn.primary}>+ New piece</Link></>} />
+    <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4"><Stat label="Planned this week" value={stats.planned} /><Stat label="Moved to filmed" value={stats.filmed} tone="brand" /><Stat label="Posts live" value={stats.posted} tone="good" /><Stat label="Overdue posts" value={stats.overdue} tone={stats.overdue ? "bad" : "good"} /></div>
+    {sp.new && <CreatePiece users={users} jobs={jobs} cancel={qs({ new: undefined })} />}
+    <form className="mb-3 grid gap-2 md:grid-cols-6" action="/content"><input type="hidden" name="view" value={view} /><input className={input} name="q" defaultValue={sp.q} placeholder="Search ideas, hooks, scripts" /><select name="status" defaultValue={sp.status ?? ""} className={input}><option value="">All stages</option>{CONTENT_STATUSES.map((s) => <option key={s} value={s}>{CONTENT_STATUS_LABEL[s]}</option>)}</select><select name="format" defaultValue={sp.format ?? ""} className={input}><option value="">All formats</option>{CONTENT_FORMATS.slice(0, -1).map((f) => <option key={f}>{f}</option>)}</select><select name="platform" defaultValue={sp.platform ?? ""} className={input}><option value="">All platforms</option>{CONTENT_PLATFORMS.map((p) => <option key={p}>{p}</option>)}</select><select name="assignee" defaultValue={sp.assignee ?? ""} className={input}><option value="">Everyone</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}</select><button className={btn.outline}>Filter</button></form>
+    <Tabs current={view} tabs={[{ key: "board", label: "Production board", href: qs({ view: "board" }) }, { key: "list", label: "Planning list", href: qs({ view: "list" }) }, { key: "calendar", label: "Posting calendar", href: qs({ view: "calendar" }) }]} />
+    {view === "board" && <ContentBoard pieces={pieces} />}
+    {view === "list" && <Card pad={false}>{pieces.length ? <ul className="divide-y divide-border">{pieces.map((p) => <li key={p.id}><Link href={`/content/${p.id}`} className="flex gap-3 px-4 py-3 hover:bg-surface-2"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">{p.title}</span><Badge color={CONTENT_STATUS_COLOR[p.status]}>{CONTENT_STATUS_LABEL[p.status]}</Badge></div><p className="mt-0.5 truncate text-xs text-muted">{p.hook || p.script || "No hook or script yet"}</p></div><p className="text-right text-xs text-muted">{p.dueAt ? fmtDay(p.dueAt) : "No film date"}<br />{p.assignedTo?.name ?? "Unassigned"}</p></Link></li>)}</ul> : <Empty>No content matches those filters.</Empty>}</Card>}
+    {view === "calendar" && <PostingCalendar pieces={pieces} calendarMode={calendarMode} calendarDate={calendarDate} qs={qs} />}
+  </Page>;
+}
+
+function CreatePiece({ users, jobs, cancel }: { users: { id: string; name: string | null; email: string }[]; jobs: { id: string; title: string; startAt: Date; client: { name: string } }[]; cancel: string }) { return <Card title="Plan a content piece" className="mb-4" action={<Link href={cancel} className="text-sm text-muted">Cancel</Link>}><form action={createContentPiece} className="grid gap-3 md:grid-cols-3"><div className="md:col-span-2"><label className={label}>Title *</label><input name="title" required className={input} placeholder="The filthy family SUV transformation" /></div><div><label className={label}>Format</label><select name="format" className={input}>{CONTENT_FORMATS.map((f) => <option key={f}>{f}</option>)}</select></div><div className="md:col-span-3"><label className={label}>Hook</label><input name="hook" className={input} placeholder="This is what 3 kids, a dog, and six months look like…" /></div><div><label className={label}>Assigned to</label><select name="assignedToId" className={input}>{users.map((u) => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}</select></div><div><label className={label}>Film date</label><input name="dueAt" type="datetime-local" className={input} /></div><div><label className={label}>Priority</label><select name="priority" className={input}><option value="1">High</option><option value="2">Normal</option><option value="3">Low</option></select></div><div className="md:col-span-3"><label className={label}>Platforms</label><div className="flex flex-wrap gap-3">{CONTENT_PLATFORMS.map((p) => <label key={p} className="text-sm"><input className="mr-1 accent-[var(--brand)]" name="platforms" type="checkbox" value={p} defaultChecked={["Instagram", "TikTok"].includes(p)} />{p}</label>)}</div></div><div className="md:col-span-3"><label className={label}>Script (Markdown-friendly)</label><textarea name="script" className={input} rows={5} placeholder="Write it exactly how Owner should say it…" /></div><div className="md:col-span-2"><label className={label}>Shot list / b-roll (one per line)</label><textarea name="shotList" className={input} rows={3} placeholder={'Open trunk reveal\nSteam clean driver seat\nWide after shot'} /></div><div><label className={label}>Linked job</label><select name="jobId" className={input}><option value="">None</option>{jobs.map((j) => <option key={j.id} value={j.id}>{j.client.name} · {j.title || "Job"}</option>)}</select></div><div className="md:col-span-3"><button className={btn.primary}>Create content piece</button></div></form></Card>; }
+
+function PostingCalendar({ pieces, calendarMode, calendarDate, qs }: { pieces: CalendarPiece[]; calendarMode: "week" | "month"; calendarDate: Date; qs: (patch: Record<string, string | undefined>) => string }) {
+  const start = calendarMode === "week" ? startOfWeek(calendarDate) : startOfMonth(calendarDate);
+  const previous = calendarMode === "week" ? addDays(start, -7) : addMonths(start, -1);
+  const next = calendarMode === "week" ? addDays(start, 7) : addMonths(start, 1);
+  const posts = pieces.flatMap((piece) => piece.posts.map((post) => ({ ...post, piece: { id: piece.id, title: piece.title } })));
+  const accounts = Array.from(new Map(posts.map((post) => [post.account.id, post.account])).values());
+  return <><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex gap-1"><Link href={qs({ calendar: "week", date: undefined })} className={`rounded-lg border px-3 py-1.5 text-sm ${calendarMode === "week" ? "border-brand bg-brand text-white" : "border-border bg-surface"}`}>Week</Link><Link href={qs({ calendar: "month", date: undefined })} className={`rounded-lg border px-3 py-1.5 text-sm ${calendarMode === "month" ? "border-brand bg-brand text-white" : "border-border bg-surface"}`}>Month</Link></div><div className="flex items-center gap-2"><Link href={qs({ date: ymd(previous) })} className={btn.outline}>←</Link><span className="min-w-28 text-center text-sm font-semibold">{calendarMode === "week" ? `${fmtDay(start)} week` : fmtMonth(start)}</span><Link href={qs({ date: ymd(next) })} className={btn.outline}>→</Link></div></div><ContentCalendar posts={posts} mode={calendarMode} cursor={calendarDate} /><div className="mt-4"><p className="mb-2 text-sm font-semibold">By account</p><div className="grid gap-3 md:grid-cols-2">{accounts.map((account) => <Card key={account.id} title={`${account.platform} ${account.handle}`}><ul className="space-y-2">{posts.filter((post) => post.account.id === account.id).sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime()).map((post) => <li key={post.id} className="rounded-lg bg-surface-2 p-2 text-sm"><Link href={`/content/${post.piece.id}`} className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${accountColor(account.platform)}`}>{post.account.platform}</Link><Link href={`/content/${post.piece.id}`} className="ml-2 font-medium">{post.piece.title}</Link><p className="mt-1 text-xs text-muted">{fmtDay(post.scheduledAt)} · {fmtTime(post.scheduledAt)} · {post.status.toLowerCase()}</p></li>)}</ul></Card>)}{!accounts.length && <Card><Empty>No scheduled posts match these filters.</Empty></Card>}</div></div></>;
+}

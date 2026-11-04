@@ -1,0 +1,22 @@
+/node_modules
+/.next/
+/out/
+.DS_Store
+*.pem
+npm-debug.log*
+.env*
+!.env.example
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+# local lead data (contains personal info)
+/.data/
+/.npm-cache
+
+.pg.log
+.dev.log
+.start.log
+/test-results/
+/playwright-report/
+/e2e/.auth.json
+/.e2e-outbox.jsonl
