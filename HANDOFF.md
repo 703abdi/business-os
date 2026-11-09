@@ -34,5 +34,34 @@ Open items before a real client:
 3. Per-client consent wording on every lead form.
 4. Compare one real Telnyx webhook body with `scripts/fixtures/telnyx/`.
 5. Voicemail on a forwarded call counts as answered (no text). Answering machine detection not wired.
-6. Check that Vercel accepts two cron entries with the same path; if not, give the second one
-   `/api/cron/messages?w=1`.
+6. Done 2026-11-09: the second cron entry is now `/api/cron/messages?w=1`, so the paths differ.
+
+## 2026-11-09: messaging merged to main
+
+PR #1 (https://github.com/703abdi/business-os/pull/1) merged into `main` by fast-forward
+(`8ca278f`). The second quiet-hours cron is `/api/cron/messages?w=1`; the route and `src/proxy.ts`
+match on pathname, so the query string needs nothing else.
+
+Checked on 2026-11-09: lint, typecheck, `npm test`, `npm run build` all pass. Runtime run against a
+scratch Postgres (dropped after) with `next dev`: all four migrations applied, seed ran, admin login
+returned 200, `/settings` returned 200 with the Messaging card, an unsigned Telnyx SMS post returned
+401, a signed STOP from a client's number returned 200 "opted out" and set `smsConsent` false and
+`smsOptOutAt`, a replay returned "duplicate", and `/api/cron/messages` with and without `?w=1`
+returned 200 with `CRON_SECRET` and 404 without it.
+
+Telnyx items Abdi still owns:
+
+1. Create or pick the Telnyx account and a Messaging Profile. Paste
+   `https://<your-domain>/api/messaging/telnyx/sms` as its inbound webhook and
+   `https://<your-domain>/api/messaging/telnyx/voice` on the Call Control app.
+2. 10DLC brand and campaign registration. Check the current fee and review time in Telnyx first.
+3. Buy one number per client, assign it to the profile, and test with the owner's own cell.
+4. Set `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_FROM_NUMBER` (and optionally
+   `TELNYX_FORWARD_TO`, `TELNYX_FORWARD_TIMEOUT_SECS`) in Vercel. Until all three required ones
+   are set, texts stay on the console provider and nothing is sent.
+5. Set `CRON_SECRET` in Vercel if it is not there, then confirm both message crons show in the
+   Vercel Crons tab after the next deploy.
+6. Per-client consent wording on every lead form.
+7. Post one real Telnyx webhook body and compare it with `scripts/fixtures/telnyx/`.
+8. Decide on answering machine detection. Today a voicemail on a forwarded call counts as answered,
+   so no text goes out.
