@@ -1,6 +1,7 @@
 // Vercel Cron: sends texts that were held back by quiet hours. Protected by CRON_SECRET.
-// Hobby plans run crons once a day, so vercel.json calls this twice (morning East and West coast);
-// on Pro, change both entries to one "*/10 * * * *".
+// Hobby plans run crons once a day, so vercel.json calls this twice (morning East and West coast).
+// The second entry is "/api/cron/messages?w=1" so the two cron paths differ; the query string is
+// ignored here and by the proxy, which matches on pathname. On Pro, use one "*/10 * * * *" entry.
 import { NextResponse } from "next/server";
 import { messagingDeps } from "@/lib/messaging";
 import { flushQueue } from "@/lib/messaging/service";

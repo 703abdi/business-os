@@ -52,7 +52,7 @@ one runs the flow.
 
 Quiet hours: texts only go out between the start and end hour in the business time zone (8am to
 8pm by default). Outside that window they are saved as queued and sent when the window opens. The
-queue is flushed by `/api/cron/messages` (twice a day on Vercel Hobby: 14:00 and 17:00 UTC), by the
+queue is flushed by `/api/cron/messages` (twice a day on Vercel Hobby: 14:00 UTC, and 17:00 UTC as `/api/cron/messages?w=1` so the cron paths differ), by the
 automations cron, and on every Telnyx webhook. On Vercel Pro, change the two cron entries to one
 `*/10 * * * *` so morning texts leave close to 8am.
 

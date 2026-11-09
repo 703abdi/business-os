@@ -3,6 +3,6 @@
     { "path": "/api/cron/daily", "schedule": "0 11 * * *" },
     { "path": "/api/cron/automations", "schedule": "0 12 * * *" },
     { "path": "/api/cron/messages", "schedule": "0 14 * * *" },
-    { "path": "/api/cron/messages", "schedule": "0 17 * * *" }
+    { "path": "/api/cron/messages?w=1", "schedule": "0 17 * * *" }
   ]
 }
