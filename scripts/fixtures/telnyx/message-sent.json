@@ -1,0 +1,44 @@
+{
+  "data": {
+    "event_type": "message.sent",
+    "id": "4ee8c3a6-4995-4309-a3c6-38e3db9ea4be",
+    "occurred_at": "2026-11-08T15:00:03.000+00:00",
+    "payload": {
+      "completed_at": null,
+      "cost": {
+        "amount": "0.0040",
+        "currency": "USD"
+      },
+      "direction": "outbound",
+      "encoding": "GSM-7",
+      "errors": [],
+      "from": {
+        "carrier": "Telnyx",
+        "line_type": "Wireless",
+        "phone_number": "+17035550100"
+      },
+      "id": "PROVIDER_ID",
+      "media": [],
+      "messaging_profile_id": "740572b6-099c-44a1-89b9-6c92163bc68d",
+      "parts": 1,
+      "record_type": "message",
+      "sent_at": "2026-11-08T15:00:01.000+00:00",
+      "tags": [],
+      "text": "Hi Sam, this is Your Business.",
+      "to": [
+        {
+          "carrier": "T-Mobile USA",
+          "line_type": "Wireless",
+          "phone_number": "+15715550142",
+          "status": "sent"
+        }
+      ],
+      "type": "SMS"
+    },
+    "record_type": "event"
+  },
+  "meta": {
+    "attempt": 1,
+    "delivered_to": "https://example.test/api/messaging/telnyx/sms"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "data": {
+    "record_type": "event",
+    "event_type": "call.hangup",
+    "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
+    "occurred_at": "2026-11-08T15:10:25.521992Z",
+    "payload": {
+      "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
+      "connection_id": "7267xxxxxxxxxxxxxx",
+      "call_leg_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
+      "call_session_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
+      "client_state": "",
+      "from": "+15715550177",
+      "to": "+17035550100",
+      "start_time": "2026-11-08T15:10:00.000000Z",
+      "tags": [],
+      "state": "hangup",
+      "hangup_cause": "normal_clearing",
+      "hangup_source": "callee",
+      "sip_hangup_cause": "200",
+      "call_quality_stats": null
+    }
+  },
+  "meta": {
+    "attempt": 1,
+    "delivered_to": "https://example.test/api/messaging/telnyx/voice"
+  }
+}

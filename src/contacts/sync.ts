@@ -91,6 +91,8 @@ export async function syncResponse(form: Form, responseOrId: FormResponse | stri
       note: `Form: ${form.title}\n${Object.entries(c.properties).map(([k, v]) => `${k}: ${v}`).join("\n")}`.slice(0, 3000),
       sourceHint: [meta.utm?.utm_source, meta.utm?.source, meta.referrer, answer(/hear about|find us|source/i)].filter(Boolean).join(" "),
       externalId: `form:${r.id}`,
+      // The consent line shows under the phone question whenever the form has one set.
+      smsConsent: form.settings.sms_consent_text?.trim() && c.phone ? { showedConsentLine: true, text: form.settings.sms_consent_text.trim(), source: `form:${form.title}`.slice(0, 120) } : undefined,
     }).catch((e) => console.error("CRM capture failed", e));
   }
   if (!c.email) return null;

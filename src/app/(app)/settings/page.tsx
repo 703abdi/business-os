@@ -4,10 +4,14 @@ import { Card, Page, PageHeader, btn } from "@/components/app/ui";
 import { ConfirmSubmit } from "@/components/app/client";
 import { clearSampleData } from "@/modules/settings/actions";
 import Link from "next/link";
+import { MessagingCard } from "@/modules/settings/MessagingCard";
 
 export const metadata = { title: "Settings" };
 
-export default async function SettingsPage() {
+type SP = Promise<{ messaging_ok?: string; messaging_error?: string }>;
+
+export default async function SettingsPage({ searchParams }: { searchParams: SP }) {
+  const sp = await searchParams;
   const sampleClients = await prisma.client.count({ where: { isSample: true } });
   return (
     <Page>
@@ -31,6 +35,8 @@ export default async function SettingsPage() {
             <li><span className="font-medium text-foreground">Ads and Google:</span> manual entry is live. API credentials are reserved for a future connection.</li>
           </ul>
         </Card>
+
+        <MessagingCard ok={sp.messaging_ok?.slice(0, 600)} error={sp.messaging_error?.slice(0, 1200)} />
 
         <Card title="Sample data" className="border-amber-300" >
           <div id="sample" className="scroll-mt-24">

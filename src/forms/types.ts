@@ -162,6 +162,7 @@ export interface FormSettings {
   close_at?: string; // ISO date; the form stops accepting responses after this
   max_responses?: number; // stops accepting responses after this many completed ones
   closed_message?: string; // shown when the form is closed
+  sms_consent_text?: string; // texting consent line shown under the phone question; set = submissions consent to texts
   accent: string; // hex
   theme: "light" | "dark";
   welcome_enabled: boolean;

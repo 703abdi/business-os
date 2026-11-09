@@ -14,7 +14,7 @@
     "db:deploy": "node scripts/migrate-deploy.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "node scripts/prisma.mjs studio",
-    "test": "tsx scripts/logic-test.mts && tsx scripts/lib-test.mts && tsx scripts/template-test.mts"
+    "test": "tsx scripts/logic-test.mts && tsx scripts/lib-test.mts && tsx scripts/template-test.mts && tsx scripts/messaging-test.mts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

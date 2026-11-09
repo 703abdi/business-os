@@ -1,0 +1,24 @@
+{
+  "data": {
+    "record_type": "event",
+    "event_type": "call.answered",
+    "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
+    "occurred_at": "2026-11-08T15:10:25.521992Z",
+    "payload": {
+      "call_control_id": "v3:transfer-leg",
+      "connection_id": "7267xxxxxxxxxxxxxx",
+      "call_leg_id": "9f2a-transfer-leg",
+      "call_session_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
+      "client_state": "",
+      "from": "+17035550100",
+      "to": "+15715550199",
+      "start_time": "2026-11-08T15:10:00.000000Z",
+      "tags": [],
+      "state": "answered"
+    }
+  },
+  "meta": {
+    "attempt": 1,
+    "delivered_to": "https://example.test/api/messaging/telnyx/voice"
+  }
+}

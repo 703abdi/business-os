@@ -6,6 +6,7 @@ import type { Client } from "@prisma/client";
 import { geocode } from "@/lib/geocode";
 import { defaultAlertTo, emailConfigured, sendLeadEmail } from "@/lib/notify";
 import { guessSource, SOURCE_LABEL, type SourceKey } from "./constants";
+import type { LeadConsent } from "@/lib/messaging/service";
 
 export type InboundLead = {
   name: string;
@@ -21,7 +22,22 @@ export type InboundLead = {
   at?: Date;
   /** Email the owner a speed-to-lead alert (forms send their own alerts, so they leave this off). */
   alert?: boolean;
+  /**
+   * The form showed the texting consent line (see docs/messaging.md). Only then can the
+   * 60-second lead reply text them. Leave it off for imports and booking syncs.
+   */
+  smsConsent?: LeadConsent;
 };
+
+/** 60-second lead reply. Never throws: a texting problem must not lose the lead. */
+async function leadReply(clientId: string, consent: LeadConsent | undefined) {
+  try {
+    const [{ messagingDeps }, { leadCreated }] = await Promise.all([import("@/lib/messaging"), import("@/lib/messaging/service")]);
+    await leadCreated(messagingDeps(), clientId, consent);
+  } catch (e) {
+    console.error("lead reply failed", e);
+  }
+}
 
 const digits = (p = "") => p.replace(/\D/g, "").slice(-10);
 const isUniqueConstraint = (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
@@ -47,6 +63,7 @@ export async function captureLead(lead: InboundLead): Promise<{ id: string; crea
     // A past client asking again is a new lead for the pipeline.
     if (existing.stage === "LOST" || existing.stage === "COMPLETED") {
       await prisma.client.update({ where: { id: existing.id }, data: { stage: "NEW", leadAt: lead.at ?? new Date(), firstReplyAt: null } });
+      await leadReply(existing.id, lead.smsConsent);
     }
     return { id: existing.id, created: false };
   }
@@ -79,6 +96,7 @@ export async function captureLead(lead: InboundLead): Promise<{ id: string; crea
     return { id: existingClient.id, created: false };
   }
   await prisma.activity.create({ data: { clientId: c.id, kind: "system", body: `Lead captured${lead.sourceHint ? ` (${lead.sourceHint})` : ""}` } });
+  await leadReply(c.id, lead.smsConsent);
   if (lead.alert && emailConfigured() && defaultAlertTo()) {
     const base = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
     await sendLeadEmail({

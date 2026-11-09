@@ -970,12 +970,20 @@ function RunnerInner({ slug, title, description, fields, settings, endings, prev
     switch (f.type) {
       case "phone":
         return (
-          <PhoneInput
-            label={plainText(T(f.title))}
-            value={typeof v === "string" ? v : ""}
-            onChange={(val) => setAnswer(f, val)}
-            inputProps={gprops as React.InputHTMLAttributes<HTMLInputElement>}
-          />
+          <>
+            <PhoneInput
+              label={plainText(T(f.title))}
+              value={typeof v === "string" ? v : ""}
+              onChange={(val) => setAnswer(f, val)}
+              inputProps={gprops as React.InputHTMLAttributes<HTMLInputElement>}
+            />
+            {/* Texting consent line: always visible, no tick box (docs/messaging.md). */}
+            {settings.sms_consent_text?.trim() && (
+              <p className="mt-3 max-w-xl text-[12px] leading-snug opacity-70" data-sms-consent>
+                {settings.sms_consent_text.trim()}
+              </p>
+            )}
+          </>
         );
       case "short_text":
       case "email":

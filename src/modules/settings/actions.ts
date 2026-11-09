@@ -12,6 +12,8 @@ export async function clearSampleData() {
   // is changed from Cascade to SetNull later. Models not linked to a sample
   // parent are also individually marked by the seed.
   await prisma.$transaction([
+    prisma.message.deleteMany({ where: { isSample: true } }),
+    prisma.phoneCall.deleteMany({ where: { isSample: true } }),
     prisma.reviewRequest.deleteMany({ where: { isSample: true } }),
     prisma.payEntry.deleteMany({ where: { isSample: true } }),
     prisma.trainingProgress.deleteMany({ where: { isSample: true } }),

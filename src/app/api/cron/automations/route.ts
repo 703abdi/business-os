@@ -5,6 +5,8 @@ import { NextResponse } from "next/server";
 import { processDue } from "@/automations/engine";
 import { processBlasts } from "@/blasts/send";
 import { calendlyConfigured, syncCalendly } from "@/calendly/sync";
+import { messagingDeps } from "@/lib/messaging";
+import { flushQueue } from "@/lib/messaging/service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -22,5 +24,6 @@ export async function GET(request: Request) {
   }
   const calendly = calendlyConfigured() ? await syncCalendly().catch((e) => ({ error: String(e) })) : null;
   const emails = await processBlasts(30_000);
-  return NextResponse.json({ ok: true, processed: total, blast_emails: emails, calendly });
+  const texts = await flushQueue(messagingDeps(), 100).catch((e) => ({ error: String(e) }));
+  return NextResponse.json({ ok: true, processed: total, blast_emails: emails, calendly, texts });
 }

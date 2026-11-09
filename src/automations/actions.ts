@@ -29,6 +29,8 @@ function check(trigger: Trigger, steps: Step[], live: boolean) {
   for (const [i, s] of steps.entries()) {
     const n = `Step ${i + 1}`;
     if (s.type === "send_email" && (!s.subject.trim() || !s.body.trim())) throw new Error(`${n}: the email needs a subject and a message.`);
+    if (s.type === "send_sms" && !s.body.trim()) throw new Error(`${n}: write the text.`);
+    if (s.type === "send_sms" && !/\bSTOP\b/.test(s.body)) throw new Error(`${n}: keep the opt-out line in the text, for example "Reply STOP to stop texts."`);
     if ((s.type === "add_tag" || s.type === "remove_tag") && !s.tag.trim()) throw new Error(`${n}: type a tag.`);
     if ((s.type === "add_to_list" || s.type === "remove_from_list") && !s.list_id) throw new Error(`${n}: choose a list.`);
     if (s.type === "webhook" && !isPublicHttpsUrl(s.url)) throw new Error(`${n}: the webhook needs a public https:// address.`);

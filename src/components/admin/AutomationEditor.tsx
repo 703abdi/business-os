@@ -21,6 +21,7 @@ type FormRef = { id: string; title: string; endings: { id: string; title: string
 
 const STEP_ICON: Record<StepType, { glyph: string; bg: string }> = {
   send_email: { glyph: "@", bg: "#262627" },
+  send_sms: { glyph: "T", bg: "#0e7c86" },
   wait: { glyph: "⏱", bg: "#e8590c" },
   add_tag: { glyph: "#", bg: "#1f9d55" },
   remove_tag: { glyph: "#", bg: "#8a8a8a" },
@@ -316,6 +317,15 @@ function StepFields({ step: s, i, set, lists, emailReady }: { step: Step; i: num
           <div><label className={tf.label} htmlFor={id("subject")}>Subject</label><input id={id("subject")} className={tf.input} value={s.subject} onChange={(e) => set({ subject: e.target.value })} /></div>
           <div><label className={tf.label} htmlFor={id("body")}>Message</label><textarea id={id("body")} rows={6} className={tf.input} value={s.body} onChange={(e) => set({ body: e.target.value })} /></div>
           <p className="text-[12px] text-[#6b6b6b]">Personalize with {"{{first_name}}"}, {"{{last_name}}"}, {"{{email}}"} or {"{{property:Question title}}"}. An unsubscribe link is added automatically.</p>
+        </div>
+      );
+    case "send_sms":
+      return (
+        <div className="space-y-2">
+          <div><label className={tf.label} htmlFor={id("sms")}>Text message</label><textarea id={id("sms")} rows={4} className={tf.input} value={s.body} onChange={(e) => set({ body: e.target.value })} /></div>
+          <p className="text-[12px] text-[#6b6b6b]">
+            Personalize with {"{{first_name}}"}, {"{{business_name}}"} and {"{{booking_link}}"}. Only goes to people whose CRM record has texting consent, never after they text STOP, and waits for the texting window in Settings &gt; Messaging. Keep &quot;Reply STOP to stop texts.&quot; in the message.
+          </p>
         </div>
       );
     case "wait":

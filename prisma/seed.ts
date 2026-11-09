@@ -12,6 +12,8 @@ async function main() {
   const password = process.env.ADMIN_PASSWORD || "change-me-before-production";
 
   // Re-running the seed only replaces records explicitly marked as samples.
+  await prisma.message.deleteMany({ where: { isSample: true } });
+  await prisma.phoneCall.deleteMany({ where: { isSample: true } });
   await prisma.contentPost.deleteMany({ where: { isSample: true } });
   await prisma.contentPiece.deleteMany({ where: { isSample: true } });
   await prisma.contentAccount.deleteMany({ where: { isSample: true } });
@@ -46,6 +48,20 @@ async function main() {
     prisma.followUp.create({ data: { clientId: client.id, assigneeId: teamMember.id, title: "Follow up with sample client", dueAt: daysFromNow(1), isSample: true } }),
     prisma.contentAccount.create({ data: { platform: "Instagram", handle: "@yourbusiness", isSample: true } }),
   ]);
+  // Sample texts so Settings > Messaging shows what the log looks like. Console provider: never sent.
+  const lead = await prisma.client.create({
+    data: {
+      name: "Sample Lead", phone: "+15555550123", stage: "NEW", source: "WEBSITE", tags: ["sample"], isSample: true,
+      smsConsent: true, smsConsentAt: new Date(), smsConsentSource: "form:Sample form", smsConsentText: "Sample consent line. Replace with your form's wording.",
+    },
+  });
+  await prisma.message.createMany({
+    data: [
+      { clientId: lead.id, direction: "outbound", toNumber: "+15555550123", body: `Hi Sample, this is ${BRAND.name}. We got your request and will be in touch shortly. Reply STOP to stop texts.`, template: "lead_reply", status: "sent", provider: "console", sentAt: new Date(), isSample: true },
+      { clientId: lead.id, direction: "inbound", toNumber: "", fromNumber: "+15555550123", body: "Thanks, is Thursday open?", template: "inbound", status: "received", provider: "console", isSample: true },
+      { clientId: null, direction: "outbound", toNumber: "+15555550188", body: `Hi, this is ${BRAND.name}. Sorry we missed your call. Reply STOP to stop texts.`, template: "missed_call", status: "queued", provider: "console", sendAfter: daysFromNow(0.5), isSample: true },
+    ],
+  });
   await prisma.contentPiece.create({ data: { title: "Sample content idea", hook: "Share how your service helps clients.", platforms: ["Instagram"], status: "IDEA", assignedToId: owner.id, isSample: true } });
 
   console.log(`Seeded generic sample data and admin ${email}. Clear sample data in Settings before using real records.`);

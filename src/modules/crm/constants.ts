@@ -24,7 +24,7 @@ export const STAGE_COLOR: Record<StageKey, BadgeColor> = {
 /** Stages that still count as an open lead. */
 export const LEAD_STAGES: StageKey[] = ["NEW", "CONTACTED", "QUOTED"];
 
-export const SOURCES = ["META", "GOOGLE", "INSTAGRAM", "TIKTOK", "REFERRAL", "REPEAT", "WEBSITE", "OTHER"] as const;
+export const SOURCES = ["META", "GOOGLE", "INSTAGRAM", "TIKTOK", "REFERRAL", "REPEAT", "WEBSITE", "MISSED_CALL", "OTHER"] as const;
 export type SourceKey = (typeof SOURCES)[number];
 export const SOURCE_LABEL: Record<SourceKey, string> = {
   META: "Meta ads",
@@ -34,6 +34,7 @@ export const SOURCE_LABEL: Record<SourceKey, string> = {
   REFERRAL: "Referral",
   REPEAT: "Repeat",
   WEBSITE: "Website",
+  MISSED_CALL: "Missed call",
   OTHER: "Unknown",
 };
 

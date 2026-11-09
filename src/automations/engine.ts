@@ -13,6 +13,8 @@ import { escapeHtml, sendEmail } from "@/lib/notify";
 import { signValue } from "@/lib/session";
 import { isPublicHttpsUrl } from "@/forms/lib";
 import { renderTemplate } from "@/automations/template";
+import { messagingDeps } from "@/lib/messaging";
+import { automationText } from "@/lib/messaging/service";
 
 export { renderTemplate };
 
@@ -150,6 +152,17 @@ async function runStep(s: Exclude<Step, { type: "wait" }>, c: Contact, i: number
           headers: unsub ? { "List-Unsubscribe": `<${unsub}>` } : undefined,
         });
         return res.ok ? ok(`Sent "${subject}" to ${c.email}`) : fail(`Email not sent: ${res.error}`);
+      }
+      case "send_sms": {
+        // Same gates as the built-in texts: consent on the CRM record, STOP, quiet hours.
+        const deps = messagingDeps();
+        const cfg = await deps.store.getConfig();
+        const text = renderTemplate(s.body, c, { business_name: cfg.businessName, booking_link: cfg.bookingUrl, ...ctx }).slice(0, 480);
+        const r = await automationText(deps, c.phone, text);
+        if (r.status === "sent") return ok(`Texted ${c.phone}`);
+        if (r.status === "queued") return ok(`Text queued (${r.reason})`);
+        if (r.status === "skipped") return ok(`Skipped text: ${r.reason}`);
+        return fail(`Text not sent: ${r.reason}`);
       }
       case "add_tag": {
         const added = await addTags([c.id], [s.tag]);

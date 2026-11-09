@@ -74,6 +74,7 @@ enum LeadSource {
   REFERRAL
   REPEAT
   WEBSITE
+  MISSED_CALL
   OTHER
 }
 
@@ -99,6 +100,13 @@ model Client {
   lostReason String     @default("")
   rebookIntervalDays Int @default(30)
   externalId String?    @unique // booking / form response id, for de-duping imports
+  // Texting consent (see docs/messaging.md). Only true when the person sent a form
+  // that showed the consent line, or called the published business line.
+  smsConsent       Boolean   @default(false)
+  smsConsentAt     DateTime?
+  smsConsentSource String    @default("") // form:<title> | webhook | missed_call | manual
+  smsConsentText   String    @default("") // the exact wording they saw, kept as a record
+  smsOptOutAt      DateTime? // set by STOP; a later form or call never turns texting back on, only START does
   isSample  Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -112,6 +120,8 @@ model Client {
   payments       Payment[]
   paymentPlans   PaymentPlan[]
   reviewRequests ReviewRequest[]
+  messages       Message[]
+  phoneCalls     PhoneCall[]
 
   @@index([stage])
   @@index([leadAt])
@@ -620,4 +630,68 @@ model InboundEvent {
   status    String   @default("received") // received | processed | ignored | error
   error     String   @default("")
   createdAt DateTime @default(now())
+}
+
+// ─── Messaging (SMS) ────────────────────────────────────────
+// See src/lib/messaging and docs/messaging.md.
+
+// Every text in or out. Nothing is texted unless TELNYX_* env vars are set;
+// otherwise the console provider logs the message here with provider "console".
+model Message {
+  id         String    @id @default(cuid())
+  clientId   String?
+  client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  direction  String // outbound | inbound
+  toNumber   String // E.164
+  fromNumber String    @default("")
+  body       String
+  template   String    @default("") // lead_reply | missed_call | automation | test | inbound
+  status     String    @default("queued") // queued | sending | sent | delivered | failed | skipped | canceled | received
+  provider   String    @default("console") // console | telnyx
+  providerId String?   @unique
+  error      String    @default("")
+  sendAfter  DateTime? // quiet hours: when a queued message may go out
+  sentAt     DateTime?
+  isSample   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([toNumber, template, createdAt])
+  @@index([status, sendAfter])
+  @@index([clientId, createdAt])
+}
+
+// One row per inbound phone call (Telnyx call session), used to tell a missed call from an answered one.
+model PhoneCall {
+  id            String    @id @default(cuid())
+  callSessionId String    @unique
+  clientId      String?
+  client        Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  fromNumber    String
+  toNumber      String
+  answered      Boolean   @default(false)
+  hangupCause   String    @default("")
+  missed        Boolean   @default(false)
+  handledAt     DateTime? // missed-call flow ran (Telnyx can send call.hangup more than once)
+  isSample      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([createdAt])
+}
+
+// Single row (id "default"). Missing row = defaults in src/lib/messaging/settings.ts.
+model MessagingSettings {
+  id                 String   @id @default("default")
+  leadReplyEnabled   Boolean  @default(true)
+  missedCallEnabled  Boolean  @default(true)
+  leadReplyTemplate  String   @default("")
+  missedCallTemplate String   @default("")
+  businessName       String   @default("") // empty = BRAND.name
+  bookingUrl         String   @default("") // empty = BRAND.links.booking
+  timezone           String   @default("") // empty = APP_TIMEZONE or BRAND.timezone
+  quietStartHour     Int      @default(8) // texts go out from this hour...
+  quietEndHour       Int      @default(20) // ...until this hour (business time); outside is queued
+  dedupeHours        Int      @default(24) // one automatic text per number per template in this window
+  updatedAt          DateTime @updatedAt
 }

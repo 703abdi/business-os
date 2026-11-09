@@ -1,7 +1,9 @@
 // Inbound lead webhook for Meta lead ads (through Zapier/Make), Squarespace
 // forms, or anything that can POST JSON. Auth: header
 // "Authorization: Bearer <LEADS_WEBHOOK_SECRET>".
-// Body: { name, phone?, email?, address?, city?, service?, message?, source? ("meta", "google", ...) }
+// Body: { name, phone?, email?, address?, city?, service?, message?, source? ("meta", "google", ...),
+//         sms_consent? (true only if the form showed the texting consent line),
+//         consent_text? (that exact line), page_url? (where the form was) }
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -18,6 +20,15 @@ function authorized(req: NextRequest) {
 }
 
 const s = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** sms_consent: true / "true" / "yes" / "on" / "1". Anything else means no texts. */
+function consentFrom(body: Record<string, unknown>) {
+  const v = body.sms_consent;
+  const yes = v === true || v === 1 || (typeof v === "string" && /^(true|yes|on|1)$/i.test(v.trim()));
+  if (!yes) return undefined;
+  const page = s(body.page_url, 300);
+  return { showedConsentLine: true, text: s(body.consent_text, 1000), source: `webhook${page ? `:${page}` : ""}` };
+}
 
 export async function POST(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,6 +52,7 @@ export async function POST(req: NextRequest) {
     sourceHint: s(body.source),
     externalId: s(body.id, 100) ? `inbound:${s(body.id, 100)}` : undefined,
     alert: true,
+    smsConsent: consentFrom(body),
   });
   await prisma.inboundEvent.update({ where: { id: event.id }, data: { status: "processed" } });
   return NextResponse.json({ ok: true, clientId: r.id, created: r.created });

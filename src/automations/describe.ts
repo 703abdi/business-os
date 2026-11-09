@@ -24,6 +24,8 @@ export function describeStep(s: Step, lists: Named[]): string {
   switch (s.type) {
     case "send_email":
       return `Send email "${s.subject}"`;
+    case "send_sms":
+      return `Send text "${s.body.slice(0, 40)}${s.body.length > 40 ? "..." : ""}"`;
     case "wait":
       return `Wait ${s.amount} ${s.unit}`;
     case "add_tag":

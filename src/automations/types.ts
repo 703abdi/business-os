@@ -18,6 +18,7 @@ export interface Trigger {
 
 export type Step =
   | { id: string; type: "send_email"; subject: string; body: string }
+  | { id: string; type: "send_sms"; body: string }
   | { id: string; type: "wait"; amount: number; unit: "minutes" | "hours" | "days" }
   | { id: string; type: "add_tag"; tag: string }
   | { id: string; type: "remove_tag"; tag: string }
@@ -64,6 +65,7 @@ export interface AutomationRun {
 
 export const STEP_LABELS: Record<StepType, string> = {
   send_email: "Send email",
+  send_sms: "Send text (SMS)",
   wait: "Wait",
   add_tag: "Add tag",
   remove_tag: "Remove tag",
@@ -86,6 +88,8 @@ export function newStep(type: StepType): Step {
   switch (type) {
     case "send_email":
       return { id, type, subject: "Thanks for applying, {{first_name}}", body: "Hi {{first_name}},\n\n" };
+    case "send_sms":
+      return { id, type, body: "Hi {{first_name}}, it's {{business_name}} following up. Book a time here: {{booking_link}} Reply STOP to stop texts." };
     case "wait":
       return { id, type, amount: 1, unit: "days" };
     case "add_tag":

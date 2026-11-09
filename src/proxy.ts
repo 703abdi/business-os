@@ -21,6 +21,9 @@ function isPublic(path: string) {
     path.startsWith("/api/p/") ||
     path === "/api/cron/automations" || // checks CRON_SECRET itself
     path === "/api/cron/daily" || // checks CRON_SECRET itself
+    path === "/api/cron/messages" || // checks CRON_SECRET itself
+    path === "/api/messaging/telnyx/sms" || // Telnyx Ed25519 signature-checked
+    path === "/api/messaging/telnyx/voice" || // Telnyx Ed25519 signature-checked
     path === "/api/calendly/webhook" || // signature-checked
     path === "/api/whop/webhook" || // signature-checked
     path === "/api/acuity/webhook" || // checks ACUITY_WEBHOOK_SECRET itself

@@ -776,6 +776,17 @@ export function FormBuilder({ form, initialTab = "questions" }: { form: Form; in
                 <CardHeader><CardTitle>Access &amp; privacy</CardTitle></CardHeader>
                 <CardBody className="space-y-4">
                   <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Texting consent line (shown under the phone question)</label>
+                    <textarea
+                      rows={3}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      value={settings.sms_consent_text ?? ""}
+                      placeholder="By sending this form you agree that [Business] can call or text you at this number about your request and your appointment. Message and data rates may apply. Reply STOP to stop texts."
+                      onChange={(e) => setS("sms_consent_text", e.target.value || undefined)}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Leave empty and this form&apos;s leads are never texted. When set, the 60-second lead reply can text people who sent this form. Keep it visible and never pre-ticked.</p>
+                  </div>
+                  <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">
                       Password protection {settings.has_password && <span className="text-emerald-600">(a password is set)</span>}
                     </label>
